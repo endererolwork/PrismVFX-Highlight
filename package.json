@@ -1,0 +1,31 @@
+{
+  "name": "com.endererol.prismfx.highlight",
+  "version": "1.0.0",
+  "displayName": "PrismFX Highlight",
+  "description": "Outline, glow, hologram, see-through and other highlight effects for URP. Made for XR training sims: Render Graph, single-pass instanced VR, nothing runs for objects that aren't highlighted.",
+  "unity": "6000.0",
+  "documentationUrl": "https://github.com/endererolwork/PrismFX-Highlight#readme",
+  "changelogUrl": "https://github.com/endererolwork/PrismFX-Highlight/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/endererolwork/PrismFX-Highlight/blob/main/LICENSE.md",
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "17.0.3"
+  },
+  "keywords": [
+    "vfx",
+    "highlight",
+    "outline",
+    "glow",
+    "hologram",
+    "selection",
+    "urp",
+    "render-graph",
+    "xr",
+    "vr",
+    "shader",
+    "hlsl"
+  ],
+  "author": {
+    "name": "Ender Erol",
+    "url": "https://github.com/endererolwork"
+  }
+}

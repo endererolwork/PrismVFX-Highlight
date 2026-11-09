@@ -1,0 +1,7 @@
+# This repo is a UPM package (no Library/Temp at root). Keep .meta files!
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vs/
+.vscode/
