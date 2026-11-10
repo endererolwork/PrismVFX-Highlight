@@ -17,6 +17,7 @@ namespace PrismFX
     public enum PrismHitMode { Flash = 0, Rim = 1, FlashAndRim = 2 }
     public enum PrismTrigger { Manual = 0, MouseHover = 1 }
     public enum PrismPreset { SciFiSelect, Danger, GhostHologram, SubtleHover, Objective }
+    public enum PrismProximityDistance { Bounds = 0, Colliders = 1 }
 
     // Shared by PrismHighlight and PrismHighlightProfile, so keep it plain serializable data.
     [Serializable]
@@ -170,6 +171,51 @@ namespace PrismFX
         [ColorUsage(true, true)] public Color hitColor = Color.white;
         [Tooltip("Used by Error().")]
         [ColorUsage(true, true)] public Color errorColor = new Color(1f, 0.15f, 0.1f, 1f);
+
+        // Proximity
+        [Tooltip("Fade the highlight in as a hand or controller gets close. Needs a PrismProximitySource on the fingertips/controllers, or Include Main Camera.")]
+        public bool proximity = false;
+        [Tooltip("Distance in meters where the effect starts to show.")]
+        [Min(0.001f)] public float proximityStartDistance = 0.25f;
+        [Tooltip("Distance in meters where it reaches full strength.")]
+        [Min(0f)] public float proximityFullDistance = 0.03f;
+        [Tooltip("Bounds is the cheapest. Colliders is more accurate for long or L-shaped parts (box, sphere, capsule and convex mesh colliders).")]
+        public PrismProximityDistance proximityDistanceMode = PrismProximityDistance.Bounds;
+        [Tooltip("Count the main camera as a source too. Handy on tablet or desktop builds where there are no hands.")]
+        public bool proximityIncludeCamera = false;
+        [Tooltip("How strong the highlight gets when the hand is right there. 1 = same as a full highlight.")]
+        [Range(0, 1)] public float proximityStrength = 0.8f;
+        [Tooltip("1 is linear. Higher keeps it subtle until the hand is really close.")]
+        [Range(0.25f, 4f)] public float proximityResponse = 1.5f;
+        [Tooltip("Seconds. Smooths out hand tracking jitter. 0 = no smoothing.")]
+        [Range(0, 0.5f)] public float proximitySmoothing = 0.08f;
+        [Tooltip("Outline reacts to proximity.")]
+        public bool proximityOutline = true;
+        [Tooltip("Outer glow reacts to proximity.")]
+        public bool proximityGlow = true;
+        [Tooltip("Inner glow reacts to proximity.")]
+        public bool proximityInnerGlow = false;
+        [Tooltip("Overlay reacts to proximity.")]
+        public bool proximityOverlay = false;
+
+        [Tooltip("A soft spot on the surface right under the fingertip. Drawn in the existing surface pass, so it costs no extra draw call.")]
+        public bool touchGlow = true;
+        [ColorUsage(true, true)] public Color touchGlowColor = new Color(0.6f, 0.95f, 1f, 1f);
+        [Tooltip("Spot radius in meters when the fingertip touches the surface.")]
+        [Min(0.001f)] public float touchGlowRadius = 0.035f;
+        [Tooltip("Distance in meters from the surface where the spot starts to show. It starts wide and faint, and tightens as the finger gets closer.")]
+        [Min(0.001f)] public float touchGlowDistance = 0.1f;
+        [Tooltip("Higher = tighter, brighter core.")]
+        [Range(0.5f, 6f)] public float touchGlowFalloff = 2f;
+        [Tooltip("Adds a thin ring around the spot.")]
+        [Range(0, 1)] public float touchGlowRing = 0.5f;
+
+        [Tooltip("Proximity amount that counts as 'near' for the sound and the enter/exit events.")]
+        [Range(0.05f, 1f)] public float proximityEventThreshold = 0.6f;
+        [Tooltip("Optional sound when a hand comes near. Leave empty for silent.")]
+        public AudioClip proximityEnterClip;
+        [Tooltip("Edit mode only. Fakes a hand at this proximity so you can tune the look without entering Play mode.")]
+        [Range(0, 1)] public float proximityPreview = 0f;
 
         // Audio
         public bool audioEnabled = true;

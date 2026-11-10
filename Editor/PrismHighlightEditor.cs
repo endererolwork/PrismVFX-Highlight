@@ -7,7 +7,7 @@ namespace PrismFX.EditorTools
     public class PrismHighlightEditor : Editor
     {
         SerializedProperty _settings, _profile, _syncWithProfile, _highlighted, _trigger, _selectOnClick, _preview;
-        SerializedProperty _onStart, _onEnd, _onHit;
+        SerializedProperty _onStart, _onEnd, _onHit, _onProxEnter, _onProxExit;
         PrismPreset _preset = PrismPreset.SciFiSelect;
 
         static GUIStyle s_Title, s_Sub, s_Fold;
@@ -22,6 +22,7 @@ namespace PrismFX.EditorTools
         static readonly Color C_See = new Color(1f, 0.35f, 0.3f);
         static readonly Color C_Hit = new Color(1f, 1f, 1f);
         static readonly Color C_Audio = new Color(0.85f, 0.5f, 1f);
+        static readonly Color C_Prox = new Color(1f, 0.75f, 0.25f);
         static readonly Color C_Events = new Color(0.6f, 0.6f, 0.6f);
 
         void OnEnable()
@@ -36,6 +37,8 @@ namespace PrismFX.EditorTools
             _onStart = serializedObject.FindProperty("onHighlightStart");
             _onEnd = serializedObject.FindProperty("onHighlightEnd");
             _onHit = serializedObject.FindProperty("onHit");
+            _onProxEnter = serializedObject.FindProperty("onProximityEnter");
+            _onProxExit = serializedObject.FindProperty("onProximityExit");
         }
 
         SerializedProperty P(string name) => _settings.FindPropertyRelative(name);
@@ -266,6 +269,13 @@ namespace PrismFX.EditorTools
                 EditorGUI.indentLevel--;
             }
 
+            if (Section("prox", "Proximity", P("proximity"), C_Prox))
+            {
+                EditorGUI.indentLevel++;
+                DrawProximity(main);
+                EditorGUI.indentLevel--;
+            }
+
             if (Section("audio", "Audio", P("audioEnabled"), C_Audio))
             {
                 EditorGUI.indentLevel++;
@@ -279,6 +289,8 @@ namespace PrismFX.EditorTools
                 EditorGUILayout.PropertyField(_onStart);
                 EditorGUILayout.PropertyField(_onEnd);
                 EditorGUILayout.PropertyField(_onHit);
+                EditorGUILayout.PropertyField(_onProxEnter);
+                EditorGUILayout.PropertyField(_onProxExit);
             }
 
             if (serializedObject.ApplyModifiedProperties())
@@ -286,6 +298,66 @@ namespace PrismFX.EditorTools
                 foreach (var t in targets) ((PrismHighlight)t).Refresh();
                 SceneView.RepaintAll();
             }
+        }
+
+        void DrawProximity(PrismHighlight main)
+        {
+            if (!P("proximity").boolValue)
+            {
+                EditorGUILayout.LabelField("Fades the highlight in as a hand gets close, and leaves a soft glow under the fingertip. Turn it on with the toggle above.", s_Sub);
+                return;
+            }
+
+            SubHeader("Range");
+            Fields("proximityStartDistance", "proximityFullDistance", "proximityDistanceMode", "proximityIncludeCamera");
+            if (P("proximityStartDistance").floatValue <= P("proximityFullDistance").floatValue)
+                EditorGUILayout.HelpBox("Start Distance should be larger than Full Distance.", MessageType.Warning);
+
+            SubHeader("Response");
+            Fields("proximityStrength", "proximityResponse", "proximitySmoothing");
+            EditorGUILayout.LabelField("Affects", EditorStyles.miniLabel);
+            EditorGUI.indentLevel++;
+            Fields("proximityOutline", "proximityGlow", "proximityInnerGlow", "proximityOverlay");
+            EditorGUI.indentLevel--;
+
+            SubHeader("Touch Glow");
+            Fields("touchGlow");
+            if (P("touchGlow").boolValue)
+            {
+                EditorGUI.indentLevel++;
+                Fields("touchGlowColor", "touchGlowRadius", "touchGlowDistance", "touchGlowFalloff", "touchGlowRing");
+                EditorGUI.indentLevel--;
+            }
+
+            SubHeader("Feedback");
+            Fields("proximityEventThreshold", "proximityEnterClip");
+            EditorGUILayout.LabelField("Enter/exit events are under Events. Hook a haptic pulse there.", s_Sub);
+
+            SubHeader(Application.isPlaying ? "Live" : "Preview");
+            if (Application.isPlaying)
+            {
+                var r = GUILayoutUtility.GetRect(1f, 18f, GUILayout.ExpandWidth(true));
+                r = EditorGUI.IndentedRect(r);
+                EditorGUI.ProgressBar(r, main.ProximityAmount, $"Proximity {main.ProximityAmount:0.00}");
+                if (PrismProximitySource.ActiveSources.Count == 0 && !P("proximityIncludeCamera").boolValue)
+                    EditorGUILayout.HelpBox("No active Prism Proximity Source in the scene.", MessageType.Warning);
+            }
+            else
+            {
+                Fields("proximityPreview");
+                if (Object.FindAnyObjectByType<PrismProximitySource>(FindObjectsInactive.Include) == null && !P("proximityIncludeCamera").boolValue)
+                {
+                    EditorGUILayout.HelpBox(
+                        "There's no Prism Proximity Source in the scene yet. Select your fingertip bones (or controller tips) " +
+                        "and use GameObject > PrismFX > Add Proximity Source, or turn on Include Main Camera.",
+                        MessageType.Info);
+                }
+            }
+        }
+
+        public override bool RequiresConstantRepaint()
+        {
+            return Application.isPlaying && P("proximity") != null && P("proximity").boolValue;
         }
 
         static void SubHeader(string text)

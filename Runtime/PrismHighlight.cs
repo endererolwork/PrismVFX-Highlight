@@ -13,7 +13,7 @@ namespace PrismFX
     [ExecuteAlways]
     [DisallowMultipleComponent]
     [AddComponentMenu("PrismFX/Prism Highlight")]
-    public class PrismHighlight : MonoBehaviour
+    public partial class PrismHighlight : MonoBehaviour
     {
         internal static readonly List<PrismHighlight> Active = new List<PrismHighlight>(32);
 
@@ -51,7 +51,9 @@ namespace PrismFX
         bool[] _drawable = new bool[8];
         Material[][] _originalMaterials;
         bool _replaced, _registered, _dirty = true, _lastHighlighted;
-        float _fade, _sentFade = -1f, _sentSeeThrough = -1f, _sentHoloFade = -1f;
+        float _fade, _sentSeeThrough = -1f, _sentHoloFade = -1f;
+        Vector4 _fadeVec, _sentFadeVec = new Vector4(-1f, -1f, -1f, -1f);
+        Vector4 _sentSpot0 = new Vector4(0f, 0f, 0f, -1f), _sentSpot1 = new Vector4(0f, 0f, 0f, -1f);
         float _hitStart = -1000f, _hitDuration = 0.25f, _hitIntensity = 1f;
         Color _hitColor = Color.white;
         PrismHitMode _hitMode = PrismHitMode.FlashAndRim;
@@ -179,6 +181,7 @@ namespace PrismFX
             s_TmpRenderers.Clear();
 
             if (_drawable.Length < _renderers.Count) _drawable = new bool[Mathf.NextPowerOfTwo(_renderers.Count)];
+            RefreshColliders();
             _dirty = true;
             if (wasReplaced) UpdateHologramReplace();
         }
@@ -216,7 +219,8 @@ namespace PrismFX
             _lastHighlighted = _highlighted;
             if (_highlighted) _targetStart = Now;
             _fade = (_highlighted && !Application.isPlaying && previewInEditor) ? 1f : 0f;
-            _sentFade = _sentSeeThrough = _sentHoloFade = -1f;
+            ResetSentValues();
+            ResetProximity();
             _dirty = true;
             Tick(0f);
         }
@@ -238,7 +242,7 @@ namespace PrismFX
             if (!_registered && !_replaced && !_highlighted && !_lastHighlighted && _fade <= 0f
                 && settings.seeThroughMode != PrismSeeThroughMode.AlwaysWhenOccluded
                 && !(settings.hologram && settings.hologramActivation == PrismHologramActivation.Always)
-                && !HitActive && (_loop == null || !_loop.isPlaying))
+                && !HitActive && !settings.proximity && (_loop == null || !_loop.isPlaying))
                 return;
 
             Tick(Application.isPlaying ? Time.deltaTime : 0f);
@@ -286,9 +290,11 @@ namespace PrismFX
             }
 
             UpdateTargetAnim();
+            UpdateProximity(dt);
+            _fadeVec = ProximityFade();
 
             bool holoOverlay = HoloFade > 0.001f && (s.hologramMode == PrismHologramMode.Overlay || !Application.isPlaying);
-            bool needs = _fade > 0.001f || HitActive || _targetAlpha > 0.001f || holoOverlay
+            bool needs = _fade > 0.001f || _prox > 0.001f || SpotActive || HitActive || _targetAlpha > 0.001f || holoOverlay
                          || s.seeThroughMode == PrismSeeThroughMode.AlwaysWhenOccluded;
 
             if (needs) Register(); else Unregister();
@@ -302,6 +308,13 @@ namespace PrismFX
             if (NeedsBounds) UpdateBounds();
             UpdateGround();
             PushDynamicUniforms();
+        }
+
+        void ResetSentValues()
+        {
+            _sentSeeThrough = _sentHoloFade = -1f;
+            _sentFadeVec = new Vector4(-1f, -1f, -1f, -1f);
+            _sentSpot0 = _sentSpot1 = new Vector4(0f, 0f, 0f, -1f);
         }
 
         void OnHighlightChanged(bool on)
@@ -367,7 +380,9 @@ namespace PrismFX
             _targetAlpha = a;
         }
 
-        void UpdateBounds()
+        void UpdateBounds() => _bounds = ComputeBounds();
+
+        Bounds ComputeBounds()
         {
             bool has = false;
             Bounds b = default(Bounds);
@@ -378,7 +393,7 @@ namespace PrismFX
                 if (!has) { b = r.bounds; has = true; }
                 else b.Encapsulate(r.bounds);
             }
-            _bounds = has ? b : new Bounds(transform.position, Vector3.zero);
+            return has ? b : new Bounds(transform.position, Vector3.zero);
         }
 
         // Renderer.bounds isn't free on skinned meshes, so only compute it when something uses it.
@@ -532,7 +547,10 @@ namespace PrismFX
             m.SetColor(ID.TargetColor, s.targetColor);
             m.SetFloat(ID.TargetZTest, ZTest(s.targetVisibility));
 
-            _sentFade = _sentSeeThrough = _sentHoloFade = -1f;
+            m.SetColor(ID.ProxColor, s.touchGlowColor);
+            m.SetVector(ID.ProxParams, new Vector4(s.touchGlowRadius, s.touchGlowFalloff, s.touchGlowRing, s.touchGlowDistance));
+
+            ResetSentValues();
 
             if (_holoMat != null) ApplyHologramUniforms();
         }
@@ -575,10 +593,20 @@ namespace PrismFX
         void PushDynamicUniforms()
         {
             var s = settings;
-            if (_fade != _sentFade)
+            if (_fadeVec != _sentFadeVec)
             {
-                _mat.SetFloat(ID.Fade, _fade);
-                _sentFade = _fade;
+                _mat.SetVector(ID.Fade, _fadeVec);
+                _sentFadeVec = _fadeVec;
+            }
+            if (_spot0 != _sentSpot0 || _spot0.w != _sentSpot0.w)
+            {
+                _mat.SetVector(ID.Spot0, _spot0);
+                _sentSpot0 = _spot0;
+            }
+            if (_spot1 != _sentSpot1 || _spot1.w != _sentSpot1.w)
+            {
+                _mat.SetVector(ID.Spot1, _spot1);
+                _sentSpot1 = _spot1;
             }
 
             float st = s.seeThroughMode == PrismSeeThroughMode.AlwaysWhenOccluded ? s.seeThroughIntensity
@@ -732,10 +760,10 @@ namespace PrismFX
                 any |= ok;
             }
 
-            bool fadeOn = _fade > 0.001f;
-            bool outline = fadeOn && s.outline > 0f && s.outlineWidth > 0f;
-            bool glow = fadeOn && s.glow > 0f && s.glowWidth > 0f;
-            bool surface = (fadeOn && (s.overlay > 0f || s.innerGlow > 0f)) || HitActive;
+            bool outline = _fadeVec.x > 0.001f && s.outline > 0f && s.outlineWidth > 0f;
+            bool glow = _fadeVec.y > 0.001f && s.glow > 0f && s.glowWidth > 0f;
+            bool surface = (_fadeVec.z > 0.001f && s.overlay > 0f) || (_fadeVec.w > 0.001f && s.innerGlow > 0f)
+                           || HitActive || SpotActive;
             bool seeThrough = _sentSeeThrough > 0.001f;
             bool holoOverlay = _holoMat != null && !_replaced && HoloFade > 0.001f;
             bool stencil = outline || glow;
@@ -794,7 +822,11 @@ namespace PrismFX
 
         static class ID
         {
-            public static readonly int Fade = Shader.PropertyToID("_HL_Fade");
+            public static readonly int Fade = Shader.PropertyToID("_HL_FadeVec");
+            public static readonly int Spot0 = Shader.PropertyToID("_HL_Spot0");
+            public static readonly int Spot1 = Shader.PropertyToID("_HL_Spot1");
+            public static readonly int ProxColor = Shader.PropertyToID("_ProxColor");
+            public static readonly int ProxParams = Shader.PropertyToID("_ProxParams");
             public static readonly int CenterWS = Shader.PropertyToID("_HL_CenterWS");
             public static readonly int Intensities = Shader.PropertyToID("_Intensities");
             public static readonly int HullCull = Shader.PropertyToID("_HullCull");

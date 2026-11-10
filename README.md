@@ -2,7 +2,9 @@
 
 Highlight and selection effects for Unity URP, built with XR training sims in mind.
 
+<!-- MEDIA: uncomment when the GIF is in Media~
 ![demo](Media~/hero.gif)
+-->
 
 I build VR maintenance and training simulations. In those, half the UX is telling the trainee what to look at: grab this bolt, wrong part, this goes there. The highlight assets I tried either broke in single-pass VR, cost too much on Quest, or still relied on the old render path. So I wrote my own. It started as a simple outline and grew from there.
 
@@ -20,6 +22,7 @@ One component, `PrismHighlight`, with these effects:
 - **Target**: a rotating reticle, either facing the camera or lying on the ground.
 - **See-through**: shows the object when it's behind a wall.
 - **Hit flash**: `HitFX()`, `Select()` and `Error()`.
+- **Proximity**: the highlight fades in as a hand gets close, and a soft glow follows the fingertip on the surface. You can see what's grabbable before you reach for it.
 - **Sounds**: on/off, hit, select, error and a hologram hum. They're 3D, with a small cooldown so fast hovering doesn't spam them.
 
 On top of that:
@@ -27,17 +30,19 @@ On top of that:
 - `PrismDashedLine`, a flowing dashed line between two objects (part → slot, object → label). It fades with the highlight.
 - Presets and profile assets, so many objects can share one look.
 
+<!-- MEDIA: uncomment when the files are in Media~
 | | |
 |---|---|
 | ![](Media~/outline-dash.gif) | ![](Media~/hologram.gif) |
 | ![](Media~/see-through.gif) | ![](Media~/inspector.png) |
+-->
 
 ## Install
 
 Package Manager → **+** → **Add package from git URL**:
 
 ```
-https://github.com/endererolwork/PrismFX-Highlight.git
+https://github.com/endererolwork/PrismVFX-Highlight.git
 ```
 
 There's also a `.unitypackage` on the [Releases](../../releases) page if you prefer that.
@@ -62,6 +67,17 @@ h.Error();              // red flash + error sound
 h.settings.outlineDashMode = PrismDashMode.Radial;
 h.Refresh();            // needed after changing settings from code
 ```
+
+### Proximity (hand tracking)
+
+1. Turn on **Proximity** in the inspector.
+2. Select the fingertip bones of your hand rig (or your controller tips) and pick **GameObject → PrismFX → Add Proximity Source**.
+
+That's all you need. Start/Full Distance control when it kicks in. Under *Affects* you choose which effects react; by default that's outline and glow. *Touch Glow* is the spot under the fingertip: it starts wide and faint and tightens as the finger gets closer.
+
+`onProximityEnter` / `onProximityExit` fire once per approach, which makes them a good place for a haptic pulse. On tablet or desktop builds, *Include Main Camera* makes the camera count as a source.
+
+It's cheap. Each object does one box-distance check per source per frame, and far-away objects only refresh their bounds every few frames. The touch glow is drawn in the existing surface pass, so it adds no extra draw call.
 
 With XR Interaction Toolkit you don't need any code: point *Hover Entered / Exited* at `PrismHighlight.highlighted` and *Select Entered* at `Select()`.
 

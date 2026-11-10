@@ -152,6 +152,23 @@ namespace PrismFX.Tests
         }
 
         [Test]
+        public void ProximityPreview_ShowsEffectInEditMode()
+        {
+            var go = Cube("ProxPreview");
+            var h = go.AddComponent<PrismHighlight>();
+            h.previewInEditor = true;
+            h.settings.proximity = true;
+            h.settings.proximityPreview = 0f;
+            h.Refresh();
+            CollectionAssert.DoesNotContain(PrismHighlight.ActiveHighlights, h);
+
+            h.settings.proximityPreview = 0.7f;
+            h.Refresh();
+            CollectionAssert.Contains(PrismHighlight.ActiveHighlights, h);
+            Assert.AreEqual(0.7f, h.ProximityAmount, 1e-4f);
+        }
+
+        [Test]
         public void SeeThroughAlways_RegistersEvenWhenNotHighlighted()
         {
             var go = Cube("See");

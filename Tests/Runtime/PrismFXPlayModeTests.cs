@@ -132,6 +132,102 @@ namespace PrismFX.Tests
             Assert.Greater(_h.WorldBounds.size.magnitude, 0.5f, "bounds should be computed while the target is visible");
         }
 
+        PrismProximitySource MakeTip(Vector3 pos)
+        {
+            var tip = new GameObject("Tip").AddComponent<PrismProximitySource>();
+            tip.radius = 0f;
+            tip.transform.position = pos;
+            return tip;
+        }
+
+        void EnableProximity()
+        {
+            var s = _h.settings;
+            s.proximity = true;
+            s.proximityStartDistance = 0.5f;
+            s.proximityFullDistance = 0.05f;
+            s.proximitySmoothing = 0f;
+            s.proximityResponse = 1f;
+            _h.Refresh();
+        }
+
+        [UnityTest]
+        public IEnumerator Proximity_FadesInNearHand_AndOutWhenFar()
+        {
+            EnableProximity();
+            var tip = MakeTip(new Vector3(0f, 0f, -3f)); // cube surface is at z = -0.5
+            yield return null; yield return null;
+            Assert.AreEqual(0f, _h.ProximityAmount, 1e-4f, "far away, should be 0");
+            CollectionAssert.DoesNotContain(PrismHighlight.ActiveHighlights, _h, "far away objects shouldn't render");
+
+            tip.transform.position = new Vector3(0f, 0f, -0.52f); // 2 cm from the surface
+            yield return null; yield return null;
+            Assert.Greater(_h.ProximityAmount, 0.95f);
+            CollectionAssert.Contains(PrismHighlight.ActiveHighlights, _h);
+            Assert.IsTrue(_h.SpotActive, "touch glow should be on this close");
+
+            tip.transform.position = new Vector3(0f, 0f, -0.75f); // 25 cm, halfway-ish
+            yield return null; yield return null;
+            Assert.That(_h.ProximityAmount, NUnit.Framework.Is.InRange(0.4f, 0.7f));
+
+            tip.transform.position = new Vector3(0f, 0f, -3f);
+            yield return null; yield return null;
+            Assert.AreEqual(0f, _h.ProximityAmount, 1e-4f);
+            CollectionAssert.DoesNotContain(PrismHighlight.ActiveHighlights, _h);
+            Object.Destroy(tip.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator Proximity_EventsFireOncePerApproach()
+        {
+            EnableProximity();
+            int enter = 0, exit = 0;
+            _h.onProximityEnter.AddListener(() => enter++);
+            _h.onProximityExit.AddListener(() => exit++);
+
+            var tip = MakeTip(new Vector3(0f, 0f, -3f));
+            yield return null;
+            tip.transform.position = new Vector3(0f, 0f, -0.52f);
+            for (int i = 0; i < 5; i++) yield return null;   // staying near: still one event
+            tip.transform.position = new Vector3(0f, 0f, -3f);
+            yield return null; yield return null;
+
+            Assert.AreEqual(1, enter);
+            Assert.AreEqual(1, exit);
+            Object.Destroy(tip.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator Proximity_OnlyAffectsSelectedEffects()
+        {
+            var cam = MakeCamera();
+            _h.settings.ApplyPreset(PrismPreset.SubtleHover);  // outline + glow + inner glow
+            _h.settings.proximityInnerGlow = false;
+            _h.settings.touchGlow = false;
+            EnableProximity();
+            var tip = MakeTip(new Vector3(0f, 0f, -0.52f));
+            yield return new WaitForSeconds(0.1f);
+
+            var sink = new CountingSink();
+            PrismHighlightFeature.DrawAll(ref sink, cam);
+            // mask + 2 glow + outline + clear, no surface pass (inner glow and touch glow are off)
+            Assert.AreEqual(5, sink.renderers);
+
+            Object.Destroy(tip.gameObject);
+            Object.Destroy(cam.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator Proximity_DisabledSourceIsIgnored()
+        {
+            EnableProximity();
+            var tip = MakeTip(new Vector3(0f, 0f, -0.52f));
+            tip.enabled = false;
+            yield return null; yield return null;
+            Assert.AreEqual(0f, _h.ProximityAmount, 1e-4f);
+            Object.Destroy(tip.gameObject);
+        }
+
         struct CountingSink : IPrismDrawSink
         {
             public int renderers, meshes;
@@ -189,9 +285,12 @@ namespace PrismFX.Tests
                 list[i] = go.AddComponent<PrismHighlight>();
                 list[i].settings.audioEnabled = false;
                 list[i].settings.outlineDashMode = PrismDashMode.Radial; // exercise the bounds path too
+                list[i].settings.proximity = true;
                 list[i].highlighted = true;
                 updates[i] = (System.Action)System.Delegate.CreateDelegate(typeof(System.Action), list[i], s_Update);
             }
+            var tip = new GameObject("Tip").AddComponent<PrismProximitySource>();
+            tip.transform.position = list[0].transform.position + new Vector3(0f, 0f, -0.55f);
             yield return new WaitForSeconds(0.4f);
 
             TestDelegate frame = () =>
@@ -206,6 +305,7 @@ namespace PrismFX.Tests
                 "update/render path allocated");
 
             foreach (var h in list) Object.Destroy(h.gameObject);
+            Object.Destroy(tip.gameObject);
             Object.Destroy(cam.gameObject);
         }
     }

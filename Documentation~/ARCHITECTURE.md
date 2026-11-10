@@ -81,3 +81,17 @@ Outside Unity, I compiled every pass with DXC against the URP 17.0 and 17.7 shad
 - Normal, instanced and single-pass-instanced stereo variants
 
 I also checked the Render Graph calls against the URP source for 6.0, 6.3 and 6.7.
+
+## Proximity (1.1)
+
+`PrismProximitySource` components (fingertips, controller tips) keep themselves in a static list. Every frame, each highlight with proximity on does this:
+
+1. Measures the distance to each source with `Bounds.SqrDistance`. In Colliders mode it also calls `Collider.ClosestPoint`, but only when the box says the source might be in range. The box distance is never larger than the real one, so skipping is safe.
+2. Turns the distance into a 0..1 amount: start/full distance, a power curve, then exponential smoothing so hand-tracking jitter doesn't flicker the outline.
+3. Picks the two closest sources for the touch glow and sends them to the shader as `xyz + strength`.
+
+Far-away objects refresh their bounds every 15 frames. Near ones refresh every frame, so a part you're carrying still measures correctly.
+
+**Per-effect fade.** The fade used to be a single float. Now it's a `float4` (outline, glow, overlay, inner glow), so proximity can drive the outline and glow without the overlay coming along.
+
+**Touch glow.** It's drawn per pixel in the surface pass: a soft falloff around the fingertip, plus an optional ring. The radius grows with hover distance, so a hovering finger makes a wide, faint spot that tightens as it approaches. A facing term keeps the spot from bleeding through thin parts.

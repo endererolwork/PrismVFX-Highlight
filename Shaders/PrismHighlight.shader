@@ -4,7 +4,9 @@ Shader "Hidden/PrismFX/Highlight"
 {
     Properties
     {
-        [HideInInspector] _HL_Fade ("Fade", Float) = 1
+        [HideInInspector] _HL_FadeVec ("Fade (outline, glow, overlay, inner)", Vector) = (1,1,1,1)
+        [HideInInspector] _HL_Spot0 ("Touch spot 0 (xyz, strength)", Vector) = (0,0,0,0)
+        [HideInInspector] _HL_Spot1 ("Touch spot 1 (xyz, strength)", Vector) = (0,0,0,0)
         [HideInInspector] _HL_CenterWS ("Center WS", Vector) = (0,0,0,0)
         [HideInInspector] _Intensities ("Intensities (outline, glow, overlay, innerGlow)", Vector) = (1,1,1,1)
         [HideInInspector] _HullCull ("Hull Cull", Float) = 1
@@ -39,13 +41,18 @@ Shader "Hidden/PrismFX/Highlight"
         [HDR] _TargetColor ("Target Color", Color) = (1,1,1,1)
         _TargetZTest ("Target ZTest", Float) = 8
         _TargetParams ("Target (alpha, pulse, -, -)", Vector) = (1,0.15,0,0)
+
+        [HDR] _ProxColor ("Touch Glow Color", Color) = (0.6,0.95,1,1)
+        _ProxParams ("Touch Glow (radius, falloff, ring, hoverDistance)", Vector) = (0.035,2,0.5,0.1)
     }
 
     HLSLINCLUDE
     #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
     CBUFFER_START(UnityPerMaterial)
-        float  _HL_Fade;
+        float4 _HL_FadeVec;
+        float4 _HL_Spot0;
+        float4 _HL_Spot1;
         float4 _HL_CenterWS;
         float4 _Intensities;
         float  _HullCull;
@@ -73,6 +80,8 @@ Shader "Hidden/PrismFX/Highlight"
         half4  _TargetColor;
         float  _TargetZTest;
         float4 _TargetParams;
+        half4  _ProxColor;
+        float4 _ProxParams;
     CBUFFER_END
 
     TEXTURE2D(_OverlayTex); SAMPLER(sampler_OverlayTex);
@@ -220,7 +229,7 @@ Shader "Hidden/PrismFX/Highlight"
     half4 OutlineFrag(VaryingsHull i) : SV_Target
     {
         UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
-        float a = _OutlineColor.a * _Intensities.x * _HL_Fade * DashMask(i.clipPos, i.centerCS, i.positionWS);
+        float a = _OutlineColor.a * _Intensities.x * _HL_FadeVec.x * DashMask(i.clipPos, i.centerCS, i.positionWS);
         return half4(_OutlineColor.rgb, saturate(a));
     }
 
@@ -239,7 +248,7 @@ Shader "Hidden/PrismFX/Highlight"
     {
         UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
         float passes = max(_GlowParams.x, 1.0);
-        float a = _GlowColor.a * _Intensities.y * _HL_Fade / passes * Pulse(_GlowParams.z, _GlowParams.w);
+        float a = _GlowColor.a * _Intensities.y * _HL_FadeVec.y / passes * Pulse(_GlowParams.z, _GlowParams.w);
         if (_DashParams2.z > 0.5) a *= DashMask(i.clipPos, i.centerCS, i.positionWS);
         half3 rgb = _GlowColor.rgb * a;
         // a bit of noise so the glow doesn't band on 8-bit targets
@@ -297,22 +306,39 @@ Shader "Hidden/PrismFX/Highlight"
         return SAMPLE_TEXTURE2D(_OverlayTex, sampler_OverlayTex, ndc * scale + scroll);
     }
 
+    float TouchSpot(float4 p, float3 positionWS, float3 normalWS)
+    {
+        if (p.w <= 0.001) return 0.0;
+        float3 toTip = p.xyz - positionWS;
+        float d = length(toTip);
+        float radius = _ProxParams.x + (1.0 - p.w) * _ProxParams.w;
+        float core = pow(saturate(1.0 - d / radius), _ProxParams.y);
+        float ring = saturate(1.0 - abs(d - radius * 0.85) / (radius * 0.08)) * _ProxParams.z;
+        // only the side facing the finger, so thin parts don't glow through
+        float facing = saturate(dot(normalize(normalWS), toTip / max(d, 1e-4)) * 1.5 + 0.2);
+        return (core + ring * 0.6) * p.w * facing;
+    }
+
     half4 SurfaceFrag(VaryingsSurf i) : SV_Target
     {
         UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
-        float fade = _HL_Fade;
         float rim = Rim(i.positionWS, i.normalWS, _InnerGlowPower);
 
         // overlay, premultiplied. blend 0 = alpha, 1 = additive
         half4 tex = SampleOverlay(i);
         float speed = _OverlayParams.z;
         float pulse = speed > 0.0 ? lerp(_OverlayParams.y, 1.0, 0.5 + 0.5 * sin(_Time.y * speed * PRISM_TAU)) : 1.0;
-        float ovA = saturate(_OverlayColor.a * tex.a * _Intensities.z * pulse * fade);
+        float ovA = saturate(_OverlayColor.a * tex.a * _Intensities.z * pulse * _HL_FadeVec.z);
         half3 rgb = _OverlayColor.rgb * tex.rgb * ovA;
         float alpha = ovA * (1.0 - _OverlayParams.x);
 
         // inner glow
-        rgb += _InnerGlowColor.rgb * (_InnerGlowColor.a * _Intensities.w * rim * fade);
+        rgb += _InnerGlowColor.rgb * (_InnerGlowColor.a * _Intensities.w * rim * _HL_FadeVec.w);
+
+        // touch glow: spot under the fingertip. Starts wide and faint while hovering,
+        // tightens up as the finger gets closer (radius grows with hover distance).
+        float spot = TouchSpot(_HL_Spot0, i.positionWS, i.normalWS) + TouchSpot(_HL_Spot1, i.positionWS, i.normalWS);
+        rgb += _ProxColor.rgb * (_ProxColor.a * saturate(spot));
 
         // hit flash ignores the highlight fade on purpose
         float hitT = (_Time.y - _HitParams.x) / max(_HitParams.y, 1e-3);
