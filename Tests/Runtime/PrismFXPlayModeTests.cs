@@ -228,11 +228,71 @@ namespace PrismFX.Tests
             Object.Destroy(tip.gameObject);
         }
 
+        [UnityTest]
+        public IEnumerator Focus_PicksStrongest_AndMasksAllFocusedObjects()
+        {
+            var cam = MakeCamera();
+            _h.settings.focus = 0.5f;
+            _h.highlighted = true;
+
+            var other = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            other.transform.position = new Vector3(1.5f, 0f, 0f);
+            var h2 = other.AddComponent<PrismHighlight>();
+            h2.settings.audioEnabled = false;
+            h2.settings.fadeInDuration = 0.1f;
+            h2.settings.focus = 1f;
+            h2.highlighted = true;
+            yield return new WaitForSeconds(0.3f);
+
+            var dominant = PrismHighlight.FindFocus(out float amount);
+            Assert.AreEqual(h2, dominant, "the stronger focus should win");
+            Assert.AreEqual(1f, amount, 1e-3f);
+
+            var mat = new Material(Shader.Find("Hidden/PrismFX/Focus"));
+            var sink = new CountingSink();
+            PrismHighlightFeature.DrawFocus(ref sink, cam, mat, new MaterialPropertyBlock());
+            Assert.AreEqual(1, sink.fullscreen, "one fullscreen triangle for the whole focus");
+            Assert.AreEqual(4, sink.renderers, "mask + clear for each of the two focused objects");
+
+            h2.highlighted = false;
+            _h.highlighted = false;
+            yield return new WaitForSeconds(0.3f);
+            Assert.IsNull(PrismHighlight.FindFocus(out _), "focus should end with the highlight");
+
+            Object.Destroy(mat);
+            Object.Destroy(other);
+            Object.Destroy(cam.gameObject);
+        }
+
+        [UnityTest]
+        public IEnumerator DistanceCulling_DropsFarObjectsFromTheRenderList()
+        {
+            var cam = MakeCamera();
+            cam.tag = "MainCamera";
+            _h.settings.distanceCulling = true;
+            _h.settings.maxDistance = 10f;
+            _h.settings.distanceFadeRange = 2f;
+            _h.highlighted = true;
+            yield return new WaitForSeconds(0.3f);
+            CollectionAssert.Contains(PrismHighlight.ActiveHighlights, _h, "5 m away, should render");
+
+            _go.transform.position = new Vector3(0f, 0f, 20f); // 25 m from the camera
+            yield return null; yield return null;
+            CollectionAssert.DoesNotContain(PrismHighlight.ActiveHighlights, _h, "beyond Max Distance, should be skipped");
+
+            _go.transform.position = Vector3.zero;
+            yield return null; yield return null;
+            CollectionAssert.Contains(PrismHighlight.ActiveHighlights, _h);
+            Object.Destroy(cam.gameObject);
+        }
+
         struct CountingSink : IPrismDrawSink
         {
             public int renderers, meshes;
             public void DrawRenderer(Renderer r, Material m, int sub, int pass) => renderers++;
             public void DrawMesh(Mesh mesh, Matrix4x4 matrix, Material m, int pass) => meshes++;
+            public int fullscreen;
+            public void DrawFullscreen(Material m, int pass, MaterialPropertyBlock p) => fullscreen++;
         }
 
         static readonly System.Reflection.MethodInfo s_Update = typeof(PrismHighlight).GetMethod("Update",

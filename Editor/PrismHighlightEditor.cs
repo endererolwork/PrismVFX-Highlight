@@ -23,6 +23,7 @@ namespace PrismFX.EditorTools
         static readonly Color C_Hit = new Color(1f, 1f, 1f);
         static readonly Color C_Audio = new Color(0.85f, 0.5f, 1f);
         static readonly Color C_Prox = new Color(1f, 0.75f, 0.25f);
+        static readonly Color C_Focus = new Color(0.55f, 0.45f, 0.95f);
         static readonly Color C_Events = new Color(0.6f, 0.6f, 0.6f);
 
         void OnEnable()
@@ -102,7 +103,7 @@ namespace PrismFX.EditorTools
             GUI.Label(new Rect(banner.x + 10f, banner.y + 2f, banner.width, 20f), "PRISM HIGHLIGHT", s_Title);
             GUI.color = new Color(0.6f, 0.75f, 0.85f);
             GUI.Label(new Rect(banner.x + 10f, banner.y + 18f, banner.width, 14f),
-                $"Outline · Glow · Hologram · Target · See-Through · Hit · SFX     |  {main.RendererCount} renderer", EditorStyles.miniLabel);
+                $"Outline · Glow · Hologram · Focus · Proximity · Target · SFX   |  {main.RendererCount} renderer", EditorStyles.miniLabel);
             GUI.color = oldColor;
             EditorGUILayout.Space(4);
 
@@ -178,6 +179,14 @@ namespace PrismFX.EditorTools
             {
                 EditorGUI.indentLevel++;
                 Fields("includeChildren", "fadeInDuration", "fadeOutDuration", "widthMode", "normalMode", "hullCull", "surfaceVisibility");
+                SubHeader("Distance");
+                Fields("distanceCulling");
+                if (P("distanceCulling").boolValue)
+                {
+                    EditorGUI.indentLevel++;
+                    Fields("maxDistance", "distanceFadeRange");
+                    EditorGUI.indentLevel--;
+                }
                 if (GUILayout.Button("Refresh Renderers")) foreach (var t in targets) ((PrismHighlight)t).RefreshRenderers();
                 EditorGUI.indentLevel--;
             }
@@ -266,6 +275,16 @@ namespace PrismFX.EditorTools
                 EditorGUI.indentLevel++;
                 Fields("hitMode", "hitDuration", "hitColor", "errorColor");
                 EditorGUILayout.LabelField("From code: HitFX(), Select(), Error()", s_Sub);
+                EditorGUI.indentLevel--;
+            }
+
+            if (Section("focus", "Focus", P("focus"), C_Focus))
+            {
+                EditorGUI.indentLevel++;
+                Fields("focusColor", "focusDim", "focusDesaturate", "focusBlur");
+                if (P("focusBlur").floatValue > 0f) { EditorGUI.indentLevel++; Fields("focusBlurRadius"); EditorGUI.indentLevel--; }
+                Fields("focusRevealOccluded");
+                EditorGUILayout.LabelField("Everything except this object gets dimmed while it's highlighted. If several objects use Focus at once, all of them stay bright and the strongest one sets the look. Set Blur to 0 on Quest.", s_Sub);
                 EditorGUI.indentLevel--;
             }
 

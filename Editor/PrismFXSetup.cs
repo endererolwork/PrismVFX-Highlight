@@ -15,6 +15,7 @@ namespace PrismFX.EditorTools
         const string HighlightShader = "Hidden/PrismFX/Highlight";
         const string HologramShader = "PrismFX/Hologram";
         const string DashedShader = "PrismFX/DashedLine";
+        const string FocusShader = "Hidden/PrismFX/Focus";
         static string AskedKey => "PrismFX.SetupAsked." + Application.dataPath.GetHashCode();
 
         static PrismFXSetup()
@@ -79,7 +80,7 @@ namespace PrismFX.EditorTools
             else if (all.Count > 0) sb.AppendLine($"✓ Feature present on {all.Count} renderer(s)");
 
             bool shadersOk = true;
-            foreach (var name in new[] { HighlightShader, HologramShader, DashedShader })
+            foreach (var name in new[] { HighlightShader, HologramShader, DashedShader, FocusShader })
             {
                 var sh = Shader.Find(name);
                 if (sh == null) { shadersOk = false; sb.AppendLine($"✗ Shader not found: {name}"); }
@@ -198,7 +199,7 @@ namespace PrismFX.EditorTools
             if (arr == null) return 0;
 
             int added = 0;
-            foreach (var name in new[] { HighlightShader, HologramShader, DashedShader })
+            foreach (var name in new[] { HighlightShader, HologramShader, DashedShader, FocusShader })
             {
                 var sh = Shader.Find(name);
                 if (sh == null) continue;

@@ -10,6 +10,7 @@ Shader "Hidden/PrismFX/Highlight"
         [HideInInspector] _HL_CenterWS ("Center WS", Vector) = (0,0,0,0)
         [HideInInspector] _Intensities ("Intensities (outline, glow, overlay, innerGlow)", Vector) = (1,1,1,1)
         [HideInInspector] _HullCull ("Hull Cull", Float) = 1
+        [HideInInspector] _FocusMaskZTest ("Focus Mask ZTest", Float) = 4
         [HideInInspector] _PrismStencilBit ("Stencil Bit (URP user bits 1,2,4,8)", Float) = 8
 
         [HDR] _OutlineColor ("Outline Color", Color) = (0.2,0.9,1,1)
@@ -57,6 +58,7 @@ Shader "Hidden/PrismFX/Highlight"
         float4 _Intensities;
         float  _HullCull;
         float  _PrismStencilBit;
+        float  _FocusMaskZTest;
         half4  _OutlineColor;
         float4 _OutlineParams;
         float  _OutlineZTest;
@@ -424,6 +426,21 @@ Shader "Hidden/PrismFX/Highlight"
         {
             Name "PrismMask"
             ZWrite Off ZTest Always Cull Off ColorMask 0
+            Stencil { Ref [_PrismStencilBit] WriteMask [_PrismStencilBit] Comp Always Pass Replace }
+            HLSLPROGRAM
+            #pragma target 3.0
+            #pragma multi_compile_instancing
+            #pragma vertex SimpleVert
+            #pragma fragment NullFrag
+            ENDHLSL
+        }
+
+        // focus mask: like PrismMask but depth-tested by default, so walls in front of the
+        // object still get dimmed. _FocusMaskZTest = Always reveals it through walls.
+        Pass
+        {
+            Name "PrismFocusMask"
+            ZWrite Off ZTest [_FocusMaskZTest] Cull Back ColorMask 0
             Stencil { Ref [_PrismStencilBit] WriteMask [_PrismStencilBit] Comp Always Pass Replace }
             HLSLPROGRAM
             #pragma target 3.0

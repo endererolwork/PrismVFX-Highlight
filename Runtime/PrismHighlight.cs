@@ -67,6 +67,7 @@ namespace PrismFX
         static readonly List<Renderer> s_TmpRenderers = new List<Renderer>(16);
 
         // looked up by pass name so reordering the shader doesn't break anything
+        static int P_FocusMask = -1;
         static int P_Mask = -1, P_Clear = -1, P_Outline = -1, P_Surface = -1, P_SeeThrough = -1, P_Target = -1, P_HoloForward = -1;
         static readonly int[] P_Glow = { -1, -1, -1, -1 };
 
@@ -291,12 +292,14 @@ namespace PrismFX
 
             UpdateTargetAnim();
             UpdateProximity(dt);
-            _fadeVec = ProximityFade();
+            UpdateDistanceFactor();
+            _fadeVec = ProximityFade() * _distFactor;
 
             bool holoOverlay = HoloFade > 0.001f && (s.hologramMode == PrismHologramMode.Overlay || !Application.isPlaying);
             bool needs = _fade > 0.001f || _prox > 0.001f || SpotActive || HitActive || _targetAlpha > 0.001f || holoOverlay
                          || s.seeThroughMode == PrismSeeThroughMode.AlwaysWhenOccluded;
 
+            if (_distFactor <= 0f) needs = false;   // too far from the camera, skip it entirely
             if (needs) Register(); else Unregister();
             if (Application.isPlaying) UpdateHologramReplace();
             if (!_registered && !_replaced) return;
@@ -490,6 +493,7 @@ namespace PrismFX
         {
             P_Mask = m.FindPass("PrismMask");
             P_Clear = m.FindPass("PrismClear");
+            P_FocusMask = m.FindPass("PrismFocusMask");
             for (int i = 0; i < 4; i++) P_Glow[i] = m.FindPass("PrismGlow" + i);
             P_Outline = m.FindPass("PrismOutline");
             P_Surface = m.FindPass("PrismSurface");
@@ -547,6 +551,7 @@ namespace PrismFX
             m.SetColor(ID.TargetColor, s.targetColor);
             m.SetFloat(ID.TargetZTest, ZTest(s.targetVisibility));
 
+            m.SetFloat(ID.FocusMaskZTest, s.focusRevealOccluded ? (float)CompareFunction.Always : (float)CompareFunction.LessEqual);
             m.SetColor(ID.ProxColor, s.touchGlowColor);
             m.SetVector(ID.ProxParams, new Vector4(s.touchGlowRadius, s.touchGlowFalloff, s.touchGlowRing, s.touchGlowDistance));
 
@@ -744,21 +749,9 @@ namespace PrismFX
 
         internal void Render<T>(ref T sink, Camera cam) where T : struct, IPrismDrawSink
         {
-            if (_mat == null || !isActiveAndEnabled) return;
+            if (_mat == null || !isActiveAndEnabled || CulledByDistance(cam)) return;
             var s = settings;
-
-            int camMask = cam.cullingMask;
-            int count = _renderers.Count;
-            if (_drawable.Length < count) _drawable = new bool[Mathf.NextPowerOfTwo(count)];
-            bool any = false;
-            for (int i = 0; i < count; i++)
-            {
-                var r = _renderers[i];
-                bool ok = r != null && r.enabled && r.isVisible && r.gameObject.activeInHierarchy
-                          && (camMask & (1 << r.gameObject.layer)) != 0;
-                _drawable[i] = ok;
-                any |= ok;
-            }
+            bool any = PrepareDrawable(cam);
 
             bool outline = _fadeVec.x > 0.001f && s.outline > 0f && s.outlineWidth > 0f;
             bool glow = _fadeVec.y > 0.001f && s.glow > 0f && s.glowWidth > 0f;
@@ -789,6 +782,26 @@ namespace PrismFX
 
             if (_targetAlpha > 0.001f && P_Target >= 0)
                 sink.DrawMesh(PrismFXResources.Quad, GetTargetMatrix(cam), _mat, P_Target);
+        }
+
+        // Fills _drawable for this camera. Renderer.isVisible also covers LOD Groups:
+        // renderers of inactive LODs aren't visible, so only the current LOD gets drawn.
+        bool PrepareDrawable(Camera cam)
+        {
+            if (CulledByDistance(cam)) return false;
+            int camMask = cam.cullingMask;
+            int count = _renderers.Count;
+            if (_drawable.Length < count) _drawable = new bool[Mathf.NextPowerOfTwo(count)];
+            bool any = false;
+            for (int i = 0; i < count; i++)
+            {
+                var r = _renderers[i];
+                bool ok = r != null && r.enabled && r.isVisible && r.gameObject.activeInHierarchy
+                          && (camMask & (1 << r.gameObject.layer)) != 0;
+                _drawable[i] = ok;
+                any |= ok;
+            }
+            return any;
         }
 
         void DrawPass<T>(ref T sink, Material m, int pass) where T : struct, IPrismDrawSink
@@ -826,6 +839,7 @@ namespace PrismFX
             public static readonly int Spot0 = Shader.PropertyToID("_HL_Spot0");
             public static readonly int Spot1 = Shader.PropertyToID("_HL_Spot1");
             public static readonly int ProxColor = Shader.PropertyToID("_ProxColor");
+            public static readonly int FocusMaskZTest = Shader.PropertyToID("_FocusMaskZTest");
             public static readonly int ProxParams = Shader.PropertyToID("_ProxParams");
             public static readonly int CenterWS = Shader.PropertyToID("_HL_CenterWS");
             public static readonly int Intensities = Shader.PropertyToID("_Intensities");

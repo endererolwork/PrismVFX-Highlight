@@ -39,6 +39,13 @@ namespace PrismFX
         [Tooltip("Applies to overlay, inner glow and hit flash.")]
         public PrismVisibility surfaceVisibility = PrismVisibility.Normal;
 
+        [Tooltip("Stop drawing when the camera is far away. In big scenes this saves draw calls and CPU, since far objects drop out of the render list.")]
+        public bool distanceCulling = false;
+        [Tooltip("Meters from the camera to the object's pivot.")]
+        [Min(0.1f)] public float maxDistance = 30f;
+        [Tooltip("Fades out over this many meters before Max Distance instead of popping.")]
+        [Min(0f)] public float distanceFadeRange = 5f;
+
         // Outline
         [Range(0, 1)] public float outline = 1f;
         [ColorUsage(true, true)] public Color outlineColor = new Color(0.25f, 0.9f, 1f, 1f);
@@ -171,6 +178,22 @@ namespace PrismFX
         [ColorUsage(true, true)] public Color hitColor = Color.white;
         [Tooltip("Used by Error().")]
         [ColorUsage(true, true)] public Color errorColor = new Color(1f, 0.15f, 0.1f, 1f);
+
+        // Focus
+        [Tooltip("Dims, desaturates and blurs everything except the highlighted object. 0 = off. When several highlights use Focus, the strongest one sets the look.")]
+        [Range(0, 1)] public float focus = 0f;
+        [Tooltip("The rest of the scene fades toward this color. Near-black dims, a dark blue gives more of a 'night mode' look.")]
+        public Color focusColor = new Color(0.02f, 0.03f, 0.05f, 1f);
+        [Tooltip("How much darker the rest of the scene gets.")]
+        [Range(0, 1)] public float focusDim = 0.55f;
+        [Tooltip("How much color is taken out of the rest of the scene.")]
+        [Range(0, 1)] public float focusDesaturate = 0.7f;
+        [Tooltip("Blur strength. This is the expensive part (9 texture reads per pixel), so set it to 0 on Quest / mobile.")]
+        [Range(0, 1)] public float focusBlur = 0.4f;
+        [Tooltip("Blur radius in pixels.")]
+        [Range(0.5f, 8f)] public float focusBlurRadius = 3f;
+        [Tooltip("Keep the object bright even where a wall is in front of it.")]
+        public bool focusRevealOccluded = false;
 
         // Proximity
         [Tooltip("Fade the highlight in as a hand or controller gets close. Needs a PrismProximitySource on the fingertips/controllers, or Include Main Camera.")]

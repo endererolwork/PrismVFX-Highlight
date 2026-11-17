@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.0 (2026-11-17)
+
+- **Focus.** While an object is highlighted, the rest of the scene gets dimmed, desaturated and blurred.
+  - One copy of the camera color and one fullscreen triangle per camera, and only while a focus is active. On other frames, URP doesn't even create the intermediate texture for it.
+  - Settings: color, dim, desaturate, blur + radius, and "reveal through walls".
+  - Several focused objects at once all stay bright; the strongest one sets the look.
+  - Works with both Render Graph and Compatibility Mode on Unity 6.
+- **Distance culling.** Objects past Max Distance leave the render list (saves draw calls and CPU), with a fade range so they don't pop.
+- **LOD Groups.** Only the visible LOD is drawn. This was mostly true already through `Renderer.isVisible`; it's now documented and the code path is shared.
+- `IPrismDrawSink` gained `DrawFullscreen`. If you implemented it yourself, add that method.
+
 ## 1.1.0 (2026-11-10)
 
 - **Proximity.** The highlight fades in as a `PrismProximitySource` (fingertip, controller) gets close. Details:

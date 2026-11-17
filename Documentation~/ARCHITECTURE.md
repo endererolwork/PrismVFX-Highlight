@@ -82,6 +82,29 @@ Outside Unity, I compiled every pass with DXC against the URP 17.0 and 17.7 shad
 
 I also checked the Render Graph calls against the URP source for 6.0, 6.3 and 6.7.
 
+## Focus (1.2)
+
+Focus needs to read the scene color, so it's the only effect here that touches the full screen. I copied the approach from URP's own `FullScreenPassRendererFeature` so MSAA, render scale and XR behave the same way.
+
+Per camera, and only while a focus is active:
+
+1. **Copy** `activeColorTexture` into a temporary texture (`Blitter.BlitTexture`).
+2. **Focus pass** with color and depth/stencil attached:
+   - Draw `PrismFocusMask` for every focused object. It writes the stencil bit, depth-tested so walls in front still get dimmed (unless *Reveal Through Walls* is on).
+   - Draw one fullscreen triangle (`Hidden/PrismFX/Focus`) with `Stencil NotEqual`. It reads the copy, then blurs (8 taps on a ring + center), desaturates and fades toward the dim color.
+   - Clear the stencil bit for those objects.
+3. **The normal highlight pass** runs after that, so outlines and glow sit on top of the dimmed scene.
+
+`requiresIntermediateTexture` is only set on frames where a focus is visible. This matters on Quest, where rendering straight to the backbuffer is noticeably cheaper.
+
+When several objects ask for focus, all of them are masked, and the strongest one (`focus × fade`) sets the parameters.
+
+## Distance culling (1.2)
+
+`Camera.main` distance gives a fade factor in `Tick`; at 0 the object unregisters. In `Render`, each camera also does a hard distance check, so a scene-view camera far away skips it too.
+
+`Renderer.isVisible` already reflects LOD culling, so objects with a LOD Group only draw the active LOD.
+
 ## Proximity (1.1)
 
 `PrismProximitySource` components (fingertips, controller tips) keep themselves in a static list. Every frame, each highlight with proximity on does this:

@@ -13,7 +13,7 @@ namespace PrismFX.Tests
         static readonly string[] HighlightPasses =
         {
             "PrismMask", "PrismClear", "PrismGlow0", "PrismGlow1", "PrismGlow2", "PrismGlow3",
-            "PrismOutline", "PrismSurface", "PrismSeeThrough", "PrismTarget"
+            "PrismOutline", "PrismSurface", "PrismSeeThrough", "PrismTarget", "PrismFocusMask"
         };
 
         GameObject _root;
@@ -37,6 +37,7 @@ namespace PrismFX.Tests
         [TestCase("Hidden/PrismFX/Highlight")]
         [TestCase("PrismFX/Hologram")]
         [TestCase("PrismFX/DashedLine")]
+        [TestCase("Hidden/PrismFX/Focus")]
         public void Shader_IsFoundAndSupported(string name)
         {
             var sh = Shader.Find(name);

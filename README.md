@@ -21,6 +21,7 @@ One component, `PrismHighlight`, with these effects:
 - **Hologram** with scanlines, a sweeping band, flicker and a bit of glitch. It can sit on top of the object or replace its materials. Replace is handy for "put the part here" ghost previews.
 - **Target**: a rotating reticle, either facing the camera or lying on the ground.
 - **See-through**: shows the object when it's behind a wall.
+- **Focus**: dims, desaturates and blurs everything else, so the trainee looks where you want. It's one fullscreen pass that only runs while a focused object is highlighted.
 - **Hit flash**: `HitFX()`, `Select()` and `Error()`.
 - **Proximity**: the highlight fades in as a hand gets close, and a soft glow follows the fingertip on the surface. You can see what's grabbable before you reach for it.
 - **Sounds**: on/off, hit, select, error and a hologram hum. They're 3D, with a small cooldown so fast hovering doesn't spam them.
@@ -99,13 +100,18 @@ Both EditMode and PlayMode tests are included. To run them, add the package to `
 
 My favorite one renders a cube through URP and counts outline-colored pixels. Another checks that 50 active highlights don't allocate anything per frame.
 
+### Big scenes
+
+Turn on *Distance Culling* under General. Objects past *Max Distance* drop out of the render list entirely, and they fade out over *Fade Range* first so nothing pops. LOD Groups work out of the box: only the LOD Unity is currently showing gets highlighted.
+
 ## Known limitations
 
 - **URP only.** Built-in and HDRP won't work.
 - **Flat-shaded meshes:** the outline can split at hard edges. Set *Normal Mode* to *FromCenter*.
 - **Hologram Replace** only swaps materials in Play mode. In the editor it previews as Overlay.
 - **See-through** reacts to everything in front of the object. There's no occluder layer filter yet.
-- **On Quest**, I'd keep glow at 2 passes and not have more than about 10 highlights visible at once.
+- **On Quest**, I'd keep glow at 2 passes and not have more than about 10 highlights visible at once. If you use Focus there, set Blur to 0, since the blur is the expensive part.
+- **Focus** needs Unity 6 (Render Graph or Compatibility Mode). On 2022.3 it's skipped.
 
 ## Next up
 
